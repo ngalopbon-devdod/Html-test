@@ -1,0 +1,1280 @@
+<!DOCTYPE html>
+<html lang="vi">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Nhà Thám Hiểm Tài Ba Pro - Đảo Toán Học</title>
+    <!-- Tailwind CSS -->
+    <script src="https://cdn.tailwindcss.com"></script>
+    <!-- Google Fonts -->
+    <link href="https://fonts.googleapis.com/css2?family=Fredoka+One&family=Quicksand:wght@500;700&display=swap" rel="stylesheet">
+    <!-- FontAwesome for icons -->
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
+    <!-- Canvas Confetti -->
+    <script src="https://cdn.jsdelivr.net/npm/canvas-confetti@1.6.0/dist/confetti.browser.min.js"></script>
+    
+    <style>
+        body {
+            font-family: 'Quicksand', sans-serif;
+            background: radial-gradient(circle, #fffbeb 0%, #fef3c7 100%);
+            touch-action: manipulation;
+        }
+        .font-header {
+            font-family: 'Fredoka One', cursive;
+        }
+        /* Dropzone animations */
+        .drop-zone {
+            transition: all 0.2s ease;
+            min-width: 62px;
+            min-height: 62px;
+        }
+        .drop-zone.drag-over {
+            transform: scale(1.15);
+            border-color: #f59e0b;
+            background-color: #fef3c7;
+        }
+        .draggable-item {
+            cursor: grab;
+            transition: transform 0.1s ease, box-shadow 0.1s ease, opacity 0.2s;
+            user-select: none;
+            touch-action: none;
+        }
+        .draggable-item:active {
+            cursor: grabbing;
+            transform: scale(0.95);
+        }
+        /* Game Map styles */
+        .map-node {
+            transition: all 0.3s ease;
+        }
+        .map-node.active {
+            box-shadow: 0 0 15px #f59e0b;
+            animation: bounce-small 1.5s infinite alternate;
+        }
+        @keyframes bounce-small {
+            0% { transform: translateY(0); }
+            100% { transform: translateY(-4px); }
+        }
+        @keyframes shake {
+            0%, 100% { transform: translateX(0); }
+            10%, 30%, 50%, 70%, 90% { transform: translateX(-6px); }
+            20%, 40%, 60%, 80% { transform: translateX(6px); }
+        }
+        .animate-shake {
+            animation: shake 0.5s ease-in-out;
+        }
+        /* Fractions layout */
+        .fraction {
+            display: inline-flex;
+            flex-direction: column;
+            align-items: center;
+            vertical-align: middle;
+            padding: 0 6px;
+        }
+        .fraction .numerator {
+            border-bottom: 3px solid #1e293b;
+            width: 100%;
+            text-align: center;
+            padding-bottom: 2px;
+        }
+        .fraction .denominator {
+            text-align: center;
+            padding-top: 2px;
+        }
+        /* Custom map line dots */
+        .map-line {
+            background-image: linear-gradient(to right, #d97706 50%, rgba(255,255,255,0) 0%);
+            background-position: bottom;
+            background-size: 10px 3px;
+            background-repeat: repeat-x;
+        }
+    </style>
+</head>
+<body class="min-h-screen flex flex-col justify-between overflow-x-hidden text-slate-800">
+
+    <!-- Web Audio API Synthesizer -->
+    <script>
+        let audioCtx = null;
+        function initAudio() {
+            if (!audioCtx) {
+                audioCtx = new (window.AudioContext || window.webkitAudioContext)();
+            }
+        }
+        function playSound(type) {
+            try {
+                initAudio();
+                if (!audioCtx) return;
+                const osc = audioCtx.createOscillator();
+                const gain = audioCtx.createGain();
+                osc.connect(gain);
+                gain.connect(audioCtx.destination);
+
+                if (type === 'click') {
+                    osc.frequency.setValueAtTime(450, audioCtx.currentTime);
+                    osc.frequency.exponentialRampToValueAtTime(900, audioCtx.currentTime + 0.08);
+                    gain.gain.setValueAtTime(0.1, audioCtx.currentTime);
+                    gain.gain.linearRampToValueAtTime(0.01, audioCtx.currentTime + 0.08);
+                    osc.start();
+                    osc.stop(audioCtx.currentTime + 0.08);
+                } else if (type === 'correct') {
+                    osc.type = 'triangle';
+                    osc.frequency.setValueAtTime(523.25, audioCtx.currentTime); // C5
+                    osc.frequency.setValueAtTime(659.25, audioCtx.currentTime + 0.08); // E5
+                    osc.frequency.setValueAtTime(783.99, audioCtx.currentTime + 0.16); // G5
+                    osc.frequency.setValueAtTime(1046.50, audioCtx.currentTime + 0.24); // C6
+                    gain.gain.setValueAtTime(0.15, audioCtx.currentTime);
+                    gain.gain.linearRampToValueAtTime(0.15, audioCtx.currentTime + 0.3);
+                    gain.gain.exponentialRampToValueAtTime(0.01, audioCtx.currentTime + 0.5);
+                    osc.start();
+                    osc.stop(audioCtx.currentTime + 0.5);
+                } else if (type === 'wrong') {
+                    osc.type = 'sawtooth';
+                    osc.frequency.setValueAtTime(130, audioCtx.currentTime);
+                    osc.frequency.linearRampToValueAtTime(80, audioCtx.currentTime + 0.25);
+                    gain.gain.setValueAtTime(0.15, audioCtx.currentTime);
+                    gain.gain.exponentialRampToValueAtTime(0.01, audioCtx.currentTime + 0.3);
+                    osc.start();
+                    osc.stop(audioCtx.currentTime + 0.3);
+                } else if (type === 'powerup') {
+                    osc.type = 'sine';
+                    osc.frequency.setValueAtTime(600, audioCtx.currentTime);
+                    osc.frequency.exponentialRampToValueAtTime(1200, audioCtx.currentTime + 0.3);
+                    gain.gain.setValueAtTime(0.15, audioCtx.currentTime);
+                    gain.gain.exponentialRampToValueAtTime(0.01, audioCtx.currentTime + 0.35);
+                    osc.start();
+                    osc.stop(audioCtx.currentTime + 0.35);
+                } else if (type === 'win') {
+                    osc.type = 'sine';
+                    const scale = [523.25, 587.33, 659.25, 698.46, 783.99, 880.00, 987.77, 1046.50];
+                    scale.forEach((freq, i) => {
+                        const o = audioCtx.createOscillator();
+                        const g = audioCtx.createGain();
+                        o.type = 'triangle';
+                        o.connect(g);
+                        g.connect(audioCtx.destination);
+                        o.frequency.setValueAtTime(freq, audioCtx.currentTime + i * 0.08);
+                        g.gain.setValueAtTime(0.1, audioCtx.currentTime + i * 0.08);
+                        g.gain.linearRampToValueAtTime(0.01, audioCtx.currentTime + i * 0.08 + 0.12);
+                        o.start(audioCtx.currentTime + i * 0.08);
+                        o.stop(audioCtx.currentTime + i * 0.08 + 0.12);
+                    });
+                }
+            } catch (e) { console.log(e); }
+        }
+    </script>
+
+    <!-- Top Navigation Bar -->
+    <header class="bg-gradient-to-r from-amber-500 via-orange-500 to-amber-600 text-white shadow-lg p-4 flex justify-between items-center z-10">
+        <div class="flex items-center space-x-3">
+            <span class="text-3xl md:text-4xl animate-bounce">🤠</span>
+            <div>
+                <h1 class="text-lg md:text-2xl font-header tracking-wider leading-none">THÁM HIỂM TOÁN HỌC PRO</h1>
+                <p class="text-xs text-amber-100 hidden md:block mt-1">Phát triển tư duy phân số và logic lớp 5</p>
+            </div>
+        </div>
+        <div id="stats-bar" class="hidden flex items-center space-x-2 md:space-x-4">
+            <div class="bg-amber-700/50 px-3 py-1 rounded-full text-xs md:text-sm font-bold flex items-center shadow-inner">
+                🚩 Vòng: <span id="current-round-badge" class="ml-1 text-yellow-300 font-header">1</span>
+            </div>
+            <div class="bg-amber-700/50 px-3 py-1 rounded-full text-xs md:text-sm font-bold flex items-center shadow-inner">
+                🏆 Điểm: <span id="current-score-badge" class="ml-1 text-yellow-300 font-header">0</span>/200
+            </div>
+        </div>
+    </header>
+
+    <!-- Main Content Area -->
+    <main class="flex-grow flex items-center justify-center p-3 md:p-6 max-w-6xl w-full mx-auto">
+        
+        <!-- ================= HOME SCREEN ================= -->
+        <section id="home-screen" class="bg-white rounded-3xl p-6 md:p-10 shadow-2xl border-4 border-amber-400 max-w-2xl w-full text-center space-y-6 transition-all duration-300">
+            <div class="relative w-36 h-36 mx-auto">
+                <div class="absolute inset-0 bg-amber-100 rounded-full animate-ping opacity-60"></div>
+                <div class="relative flex items-center justify-center w-36 h-36 bg-amber-200 rounded-full text-7xl shadow-lg border-4 border-amber-400">
+                    👑
+                </div>
+            </div>
+            
+            <h2 class="text-3xl md:text-4xl font-header text-amber-600 leading-tight">Nhà Thám Hiểm Tài Ba</h2>
+            <h3 class="text-lg md:text-xl font-bold text-slate-600 -mt-2">Chinh Phục Đền Thờ Cổ Đại</h3>
+            
+            <p class="text-slate-600 text-sm md:text-base leading-relaxed max-w-md mx-auto">
+                Hãy cùng người bạn đồng hành <strong>Khỉ Coco</strong> chinh phục <strong class="text-orange-500 text-lg">20 mật thư toán học</strong> để thắp sáng đền thờ cổ kính! 
+            </p>
+
+            <div class="bg-amber-50 p-4 rounded-2xl border border-amber-200 text-left space-y-2 text-xs md:text-sm">
+                <div class="flex items-center space-x-2 text-amber-800 font-bold">
+                    <span>🧭</span> <span>Hành trình gồm 3 vòng thử thách:</span>
+                </div>
+                <ul class="list-disc list-inside space-y-1 text-slate-600 pl-2">
+                    <li><strong>Vòng 1: Khởi động (8 câu):</strong> Phép tính phân số đơn giản.</li>
+                    <li><strong>Vòng 2: Vượt chướng ngại (7 câu):</strong> So sánh & tìm ẩn số X.</li>
+                    <li><strong>Vòng 3: Khai quật kho báu (5 câu):</strong> Biểu thức phối hợp phức tạp.</li>
+                </ul>
+            </div>
+
+            <div class="grid grid-cols-1 sm:grid-cols-2 gap-4 pt-2">
+                <button onclick="playSound('click'); showRules()" class="bg-sky-500 hover:bg-sky-600 text-white font-bold py-3 px-6 rounded-2xl shadow-md transition-all text-lg flex items-center justify-center space-x-2">
+                    <i class="fa-solid fa-circle-info"></i>
+                    <span>Cách Chơi</span>
+                </button>
+                <button onclick="playSound('click'); startGame()" class="bg-emerald-500 hover:bg-emerald-600 text-white font-bold py-3 px-6 rounded-2xl shadow-md transition-all text-lg flex items-center justify-center space-x-2 border-b-4 border-emerald-700 active:border-b-0 transform active:translate-y-1">
+                    <i class="fa-solid fa-play animate-pulse"></i>
+                    <span>Khám Phá Ngay!</span>
+                </button>
+            </div>
+        </section>
+
+        <!-- ================= RULES MODAL ================= -->
+        <section id="rules-screen" class="hidden bg-white rounded-3xl p-6 md:p-8 shadow-2xl border-4 border-sky-400 max-w-2xl w-full space-y-4 transition-all duration-300">
+            <h2 class="text-2xl md:text-3xl font-header text-sky-600 text-center flex items-center justify-center space-x-2">
+                <span>📖</span> <span>Sổ Tay Thám Hiểm</span>
+            </h2>
+            
+            <div class="space-y-3.5 text-slate-700 text-sm md:text-base leading-relaxed">
+                <div class="bg-blue-50 p-4 rounded-2xl border border-blue-200 space-y-2">
+                    <h3 class="font-bold text-blue-800 text-base flex items-center space-x-2">
+                        <span>🌟</span> <span>Cơ chế kéo thả & tương tác cực nhạy:</span>
+                    </h3>
+                    <p class="text-slate-600 pl-6">
+                        - <strong>Kéo và thả</strong> các tấm thẻ đáp án màu vàng/hồng vào ô trống thích hợp.
+                    </p>
+                    <p class="text-slate-600 pl-6">
+                        - Hoặc <strong>bấm vào thẻ lựa chọn trước</strong>, sau đó <strong>bấm vào ô trống</strong> để tự động điền nhanh (Thích hợp cho ipad/điện thoại!).
+                    </p>
+                </div>
+
+                <div class="bg-amber-50 p-4 rounded-2xl border border-amber-200 space-y-2">
+                    <h3 class="font-bold text-amber-800 text-base flex items-center space-x-2">
+                        <span>⚡</span> <span>Vũ khí bổ trợ đắc lực:</span>
+                    </h3>
+                    <p class="text-slate-600">
+                        🔭 <strong>Kính Viễn Vọng:</strong> Loại bỏ ngay 2 phương án gây nhiễu sai. (Dùng 1 lần/trận)
+                    </p>
+                    <p class="text-slate-600">
+                        🧭 <strong>La Bàn Chỉ Đường:</strong> Khỉ Coco thông thái sẽ gợi ý cách quy đồng mẫu số hoặc phân tích đề bài cực kỳ dễ hiểu. (Dùng 1 lần/trận)
+                    </p>
+                </div>
+            </div>
+
+            <div class="text-center pt-2">
+                <button onclick="playSound('click'); hideRules()" class="bg-slate-600 hover:bg-slate-700 text-white font-bold py-2.5 px-8 rounded-xl transition-all">
+                    Quay Lại Trang Chủ
+                </button>
+            </div>
+        </section>
+
+        <!-- ================= PLAY SCREEN ================= -->
+        <section id="play-screen" class="hidden w-full flex flex-col space-y-4">
+            
+            <!-- Adventure Map Track & Checkpoints -->
+            <div class="w-full bg-white rounded-2xl p-3 shadow-md border border-slate-100 flex flex-col space-y-2">
+                <div class="flex justify-between items-center text-xs font-bold text-slate-500 px-1">
+                    <span>🗺️ BẢN ĐỒ CHINH PHỤC ĐẢO TOÁN HỌC:</span>
+                    <span id="map-phase-text" class="text-amber-600 font-header">Vòng 1: Khởi động</span>
+                </div>
+                
+                <!-- Adventure Progress Track -->
+                <div class="relative w-full h-8 flex items-center justify-between px-3 bg-amber-50 rounded-xl overflow-hidden border border-amber-100">
+                    <div class="absolute left-0 top-1/2 -translate-y-1/2 h-1 bg-amber-200 w-full z-0 map-line"></div>
+                    <!-- Dynamic Progress fill -->
+                    <div id="map-track-fill" class="absolute left-0 top-1/2 -translate-y-1/2 h-1 bg-gradient-to-r from-amber-500 to-emerald-500 transition-all duration-300" style="width: 5%"></div>
+                    
+                    <!-- Nodes -->
+                    <div class="flex justify-between w-full z-10">
+                        <div id="node-start" class="map-node w-5 h-5 bg-emerald-500 rounded-full border-2 border-white flex items-center justify-center text-[10px] text-white active">🏕️</div>
+                        <div id="node-mid1" class="map-node w-5 h-5 bg-slate-300 rounded-full border-2 border-white flex items-center justify-center text-[10px] text-white">🚩</div>
+                        <div id="node-mid2" class="map-node w-5 h-5 bg-slate-300 rounded-full border-2 border-white flex items-center justify-center text-[10px] text-white">🔥</div>
+                        <div id="node-end" class="map-node w-5 h-5 bg-slate-300 rounded-full border-2 border-white flex items-center justify-center text-[10px] text-white">🔱</div>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Dashboard Details (Companion, Power-ups) -->
+            <div class="grid grid-cols-1 lg:grid-cols-4 gap-4">
+                
+                <!-- Left Sidebar: Companion & Power-ups -->
+                <div class="lg:col-span-1 flex flex-col space-y-4">
+                    
+                    <!-- Companion Khỉ Coco Card -->
+                    <div class="bg-white rounded-2xl p-4 shadow-md border border-slate-100 flex flex-row lg:flex-col items-center lg:items-center space-x-4 lg:space-x-0 lg:space-y-3">
+                        <div class="text-5xl md:text-6xl animate-bounce">🐒</div>
+                        <div class="text-left lg:text-center flex-grow">
+                            <h4 class="font-bold text-amber-700 text-sm">Bạn đồng hành Coco</h4>
+                            <!-- Interactive Bubble talk -->
+                            <div class="relative bg-amber-50 border border-amber-200 text-slate-600 text-xs rounded-xl p-2.5 mt-1 lg:mt-2">
+                                <span id="coco-bubble">Cố lên thám hiểm trẻ! Tôi luôn sẵn sàng giúp bạn.</span>
+                                <!-- Bubble pointer -->
+                                <div class="absolute left-3 lg:left-1/2 -top-1.5 lg:-top-2 transform lg:-translate-x-1/2 w-3 h-3 bg-amber-50 border-l border-t border-amber-200 rotate-45"></div>
+                            </div>
+                        </div>
+                    </div>
+
+                    <!-- Power-ups Container -->
+                    <div class="bg-white rounded-2xl p-4 shadow-md border border-slate-100 space-y-3">
+                        <h4 class="font-bold text-xs text-slate-400 uppercase tracking-wider text-center">Trang Bị Hỗ Trợ</h4>
+                        <div class="grid grid-cols-2 gap-2">
+                            <!-- Telescope helper -->
+                            <button id="powerup-telescope" onclick="useTelescope()" class="bg-gradient-to-b from-sky-400 to-sky-500 hover:from-sky-500 hover:to-sky-600 text-white rounded-xl p-2.5 flex flex-col items-center justify-center transition-all shadow-md group disabled:opacity-45 disabled:pointer-events-none">
+                                <span class="text-2xl group-hover:scale-110 transition-transform">🔭</span>
+                                <span class="text-[10px] font-bold mt-1">KÍNH VIỄN VỌNG</span>
+                                <span id="tele-status" class="text-[9px] bg-sky-600 px-1.5 py-0.5 rounded-full mt-1">Sẵn sàng</span>
+                            </button>
+                            <!-- Compass helper -->
+                            <button id="powerup-compass" onclick="useCompass()" class="bg-gradient-to-b from-rose-400 to-rose-500 hover:from-rose-500 hover:to-rose-600 text-white rounded-xl p-2.5 flex flex-col items-center justify-center transition-all shadow-md group disabled:opacity-45 disabled:pointer-events-none">
+                                <span class="text-2xl group-hover:scale-110 transition-transform">🧭</span>
+                                <span class="text-[10px] font-bold mt-1">LA BÀN CHỈ ĐƯỜNG</span>
+                                <span id="compass-status" class="text-[9px] bg-rose-600 px-1.5 py-0.5 rounded-full mt-1">Sẵn sàng</span>
+                            </button>
+                        </div>
+                    </div>
+
+                </div>
+
+                <!-- Right Workspace: Questions & Options -->
+                <div class="lg:col-span-3 flex flex-col space-y-4">
+                    <div id="game-card" class="bg-white rounded-3xl p-4 md:p-6 shadow-xl border-4 border-amber-300 flex flex-col items-center justify-center space-y-5 relative transition-transform duration-300">
+                        
+                        <!-- Question Meta Info -->
+                        <div class="w-full flex justify-between items-center border-b border-slate-100 pb-2">
+                            <span id="tag-level" class="bg-green-100 text-green-800 text-xs font-extrabold px-3 py-1 rounded-full uppercase tracking-wider">Mức độ: Dễ</span>
+                            <span class="text-xs md:text-sm text-slate-500 font-bold">Mật thư số <span id="current-question-num" class="text-amber-600 text-base font-header">1</span> / 20</span>
+                        </div>
+
+                        <!-- Question Instruction -->
+                        <div class="w-full text-center">
+                            <h3 id="question-text" class="text-base md:text-lg font-bold text-slate-700 leading-relaxed max-w-2xl mx-auto">
+                                Loading...
+                            </h3>
+                        </div>
+
+                        <!-- Visual Math Board -->
+                        <div id="math-board" class="w-full bg-amber-50/70 rounded-2xl p-5 md:p-8 border-2 border-amber-200/60 min-h-[140px] flex items-center justify-center flex-wrap gap-4 md:gap-6 text-xl md:text-3xl font-bold select-none text-slate-800">
+                            <!-- Math board components render dynamically -->
+                        </div>
+
+                        <!-- Choices Selection Pool -->
+                        <div class="w-full text-center space-y-2 bg-slate-50/80 p-3.5 rounded-2xl border border-slate-200">
+                            <p class="text-xs font-bold text-slate-400 uppercase tracking-wider">Hòm Thẻ Đáp Án (Kéo thẻ hoặc chạm để chọn)</p>
+                            
+                            <div id="drag-sources" class="flex flex-wrap justify-center gap-2.5 md:gap-3.5 py-1.5">
+                                <!-- Option tokens render dynamically -->
+                            </div>
+                        </div>
+
+                        <!-- Action Area -->
+                        <div class="w-full flex flex-col items-center justify-center space-y-3 pt-2">
+                            <div id="feedback-area" class="hidden text-center font-bold text-sm md:text-base p-3 rounded-xl transition-all duration-300 w-full max-w-lg border">
+                                <!-- Dynamic response feedback -->
+                            </div>
+
+                            <div class="flex space-x-3">
+                                <button id="btn-check" onclick="checkAnswer()" class="bg-blue-600 hover:bg-blue-700 text-white font-bold py-2.5 px-8 rounded-xl shadow-md transition-all flex items-center space-x-2 text-base">
+                                    <span>Nộp Đáp Án</span> <span>🚀</span>
+                                </button>
+                                <button id="btn-next" onclick="nextQuestion()" class="hidden bg-emerald-500 hover:bg-emerald-600 text-white font-bold py-2.5 px-8 rounded-xl shadow-md transition-all flex items-center space-x-2 text-base animate-bounce">
+                                    <span>Tiếp Tục Thám Hiểm</span> <span>➡️</span>
+                                </button>
+                            </div>
+                        </div>
+
+                    </div>
+                </div>
+
+            </div>
+        </section>
+
+        <!-- ================= FINAL WINNING SCREEN ================= -->
+        <section id="win-screen" class="hidden bg-white rounded-3xl p-8 md:p-12 shadow-2xl border-4 border-emerald-400 max-w-2xl w-full text-center space-y-6 transition-all duration-300">
+            <div class="text-8xl">👑</div>
+            <h2 class="text-3xl md:text-4xl font-header text-emerald-600 leading-tight">Tuyệt Vời! Đã Thắp Sáng Đền Thờ</h2>
+            
+            <p class="text-slate-600 text-base md:text-lg">
+                Chúc mừng nhà thám hiểm lỗi lạc! Bạn đã giải chính xác toàn bộ 20 mật thư toán học phân số cực kỳ thuyết phục!
+            </p>
+
+            <div class="bg-emerald-50 p-5 rounded-2xl border-2 border-emerald-100 max-w-md mx-auto space-y-4">
+                <div class="text-xs text-slate-500 font-bold uppercase tracking-wider">Thành Quả Chuyến Thám Hiểm</div>
+                <div class="grid grid-cols-2 gap-4">
+                    <div class="bg-white p-3 rounded-xl shadow-sm">
+                        <span class="text-xs text-slate-400 block font-bold">ĐIỂM SỐ</span>
+                        <span id="final-score" class="text-3xl font-extrabold text-emerald-600">200</span> <span class="text-slate-400 font-bold text-xs">/ 200</span>
+                    </div>
+                    <div class="bg-white p-3 rounded-xl shadow-sm">
+                        <span class="text-xs text-slate-400 block font-bold">DANH HIỆU</span>
+                        <span id="final-badge" class="text-sm font-bold text-amber-600 block leading-tight mt-1">Huyền Thoại Toán Học 🌟</span>
+                    </div>
+                </div>
+            </div>
+
+            <div class="flex flex-col sm:flex-row justify-center gap-4 pt-2">
+                <button onclick="playSound('click'); restartGame()" class="bg-emerald-500 hover:bg-emerald-600 text-white font-bold py-3 px-8 rounded-2xl transition-all shadow-md flex items-center justify-center space-x-2 border-b-4 border-emerald-700 active:border-b-0 transform active:translate-y-1">
+                    <span>Chơi Lại Từ Đầu</span> <span>🔄</span>
+                </button>
+                <button onclick="playSound('click'); shareSuccess()" class="bg-sky-500 hover:bg-sky-600 text-white font-bold py-3 px-8 rounded-2xl transition-all shadow-md flex items-center justify-center space-x-2">
+                    <span>Chia sẻ chiến tích</span> <span>🔗</span>
+                </button>
+            </div>
+        </section>
+
+    </main>
+
+    <!-- Custom Modal for Compass Compass -->
+    <div id="compass-modal" class="fixed inset-0 bg-slate-900/60 backdrop-blur-sm flex items-center justify-center z-50 p-4 hidden">
+        <div class="bg-white rounded-3xl p-6 max-w-md w-full border-4 border-rose-400 space-y-4 shadow-2xl transform scale-95 transition-all duration-300">
+            <div class="flex items-center space-x-3 text-rose-500">
+                <span class="text-3xl">🧭</span>
+                <h3 class="text-xl font-header">La Bàn Gợi Ý Chi Tiết</h3>
+            </div>
+            <div id="compass-detail-content" class="text-slate-600 text-sm md:text-base leading-relaxed p-4 bg-rose-50 rounded-2xl border border-rose-100">
+                <!-- Guide text goes here -->
+            </div>
+            <div class="text-right">
+                <button onclick="playSound('click'); closeCompassModal()" class="bg-rose-500 hover:bg-rose-600 text-white font-bold py-2 px-6 rounded-xl text-sm transition-all shadow">
+                    Đã thông suốt!
+                </button>
+            </div>
+        </div>
+    </div>
+
+    <!-- Footer -->
+    <footer class="bg-slate-100 text-slate-500 text-center py-3 text-[10px] md:text-xs font-bold border-t border-slate-200">
+        Học Viện Thám Hiểm Toán Học • Sáng Tạo Dạy Học Lớp 5 GDPT Mới
+    </footer>
+
+    <!-- Clipboard alert -->
+    <div id="custom-toast" class="fixed bottom-6 left-1/2 transform -translate-x-1/2 bg-slate-800 text-white py-2 px-5 rounded-xl shadow-lg font-bold text-xs hidden transition-opacity duration-300 z-50">
+        Đã sao chép liên kết vào bộ nhớ tạm! 📋
+    </div>
+
+    <!-- ================= PRO 20-QUESTION DATABASE ================= -->
+    <script>
+        const PRO_DATABASE = [
+            // --- VÒNG 1: KHỞI ĐỘNG (8 CÂU) ---
+            {
+                id: 1, round: 1, title: "Làm Quen Với Đất Đỏ", type: "operator",
+                text: "Hoàn thiện phép cộng phân số cùng mẫu số sau:",
+                formula: [
+                    { type: 'fraction', num: 3, den: 8 },
+                    { type: 'drop', id: 'op1' },
+                    { type: 'fraction', num: 4, den: 8 },
+                    { type: 'text', val: '=' },
+                    { type: 'fraction', num: 7, den: 8 }
+                ],
+                options: ['+', '−', '×', '÷'], answers: { op1: '+' },
+                hint: "Cộng hai phân số cùng mẫu số: Ta cộng hai tử số và giữ nguyên mẫu số (3 + 4 = 7)."
+            },
+            {
+                id: 2, round: 1, title: "Suối Đá Cuội", type: "number",
+                text: "Điền số thích hợp vào vị trí tử số còn thiếu để tạo thành phép tính đúng:",
+                formula: [
+                    { type: 'fraction', num: 11, den: 15 },
+                    { type: 'text', val: '−' },
+                    { type: 'fraction', num: '?', den: 15, isDrop: true, dropId: 'num1' },
+                    { type: 'text', val: '=' },
+                    { type: 'fraction', num: 4, den: 15 }
+                ],
+                options: ['5', '6', '7', '8'], answers: { num1: '7' },
+                hint: "Tìm số mà 11 trừ đi nó bằng 4. Nhẩm nhanh: 11 - 7 = 4."
+            },
+            {
+                id: 3, round: 1, title: "Thung Lũng Tre", type: "operator",
+                text: "Điền dấu phép tính nhân hai phân số dưới đây:",
+                formula: [
+                    { type: 'fraction', num: 2, den: 3 },
+                    { type: 'drop', id: 'op1' },
+                    { type: 'fraction', num: 3, den: 7 },
+                    { type: 'text', val: '=' },
+                    { type: 'fraction', num: 6, den: 21 }
+                ],
+                options: ['+', '−', '×', '÷'], answers: { op1: '×' },
+                hint: "Tử số nhân tử số (2 × 3 = 6), mẫu số nhân mẫu số (3 × 7 = 21). Đây là phép nhân."
+            },
+            {
+                id: 4, round: 1, title: "Cầu Cây Đổ", type: "number",
+                text: "Tìm tử số thích hợp để hoàn thành phép chia phân số dưới đây:",
+                formula: [
+                    { type: 'fraction', num: 2, den: 3 },
+                    { type: 'text', val: '÷' },
+                    { type: 'fraction', num: 3, den: 4 },
+                    { type: 'text', val: '=' },
+                    { type: 'fraction', num: '?', den: 9, isDrop: true, dropId: 'num1' }
+                ],
+                options: ['6', '8', '10', '12'], answers: { num1: '8' },
+                hint: "Phép chia phân số bằng nhân nghịch đảo: (2/3) ÷ (3/4) = (2/3) × (4/3) = (2×4)/(3×3) = 8/9."
+            },
+            {
+                id: 5, round: 1, title: "Hang Động Bạc", type: "operator",
+                text: "Hoàn chỉnh phép trừ phân số cùng mẫu dưới đây:",
+                formula: [
+                    { type: 'fraction', num: 9, den: 13 },
+                    { type: 'drop', id: 'op1' },
+                    { type: 'fraction', num: 2, den: 13 },
+                    { type: 'text', val: '=' },
+                    { type: 'fraction', num: 7, den: 13 }
+                ],
+                options: ['+', '−', '×', '÷'], answers: { op1: '−' },
+                hint: "Trừ tử số: 9 - 2 = 7 và mẫu số 13 giữ nguyên. Đây là phép trừ."
+            },
+            {
+                id: 6, round: 1, title: "Cây Cổ Thụ", type: "number",
+                text: "Nhân một số tự nhiên với phân số. Hãy điền giá trị tử số thích hợp:",
+                formula: [
+                    { type: 'text', val: '3 ×' },
+                    { type: 'fraction', num: 2, den: 11 },
+                    { type: 'text', val: '=' },
+                    { type: 'fraction', num: '?', den: 11, isDrop: true, dropId: 'num1' }
+                ],
+                options: ['5', '6', '7', '8'], answers: { num1: '6' },
+                hint: "Muốn nhân số tự nhiên với phân số, ta lấy số tự nhiên nhân với tử số và giữ nguyên mẫu số (3 × 2 = 6)."
+            },
+            {
+                id: 7, round: 1, title: "Hồ Sen Đất Sét", type: "number",
+                text: "Chia một phân số cho một số tự nhiên. Hãy điền mẫu số thích hợp:",
+                formula: [
+                    { type: 'fraction', num: 4, den: 5 },
+                    { type: 'text', val: '÷ 3 =' },
+                    { type: 'fraction', num: 4, den: '?', isDrop: true, dropId: 'num1' }
+                ],
+                options: ['8', '15', '12', '10'], answers: { num1: '15' },
+                hint: "Phép chia phân số cho số tự nhiên: mẫu số mới sẽ bằng mẫu số nhân với số tự nhiên đó (5 × 3 = 15)."
+            },
+            {
+                id: 8, round: 1, title: "Lối Vào Vực Sâu", type: "operator",
+                text: "Thực hiện cộng phân số khác mẫu (đã quy đồng mẫu số chung là 12):",
+                formula: [
+                    { type: 'fraction', num: 1, den: 4 },
+                    { type: 'drop', id: 'op1' },
+                    { type: 'fraction', num: 1, den: 3 },
+                    { type: 'text', val: '=' },
+                    { type: 'fraction', num: 3, den: 12 },
+                    { type: 'text', val: '+' },
+                    { type: 'fraction', num: 4, den: 12 },
+                    { type: 'text', val: '=' },
+                    { type: 'fraction', num: 7, den: 12 }
+                ],
+                options: ['+', '−', '×', '÷'], answers: { op1: '+' },
+                hint: "Quy đồng 1/4 thành 3/12 và 1/3 thành 4/12. Phép tính cần điền ở đầu là cộng."
+            },
+
+            // --- VÒNG 2: VƯỢT CHƯỚNG NGẠI VẬT (7 CÂU) ---
+            {
+                id: 9, round: 2, title: "Cổng Rồng Đá", type: "operator",
+                text: "Thử thách so sánh phân số! Hãy đặt ký hiệu so sánh chính xác vào ô trống:",
+                formula: [
+                    { type: 'fraction', num: 4, den: 7 },
+                    { type: 'drop', id: 'op1' },
+                    { type: 'fraction', num: 4, den: 9 }
+                ],
+                options: ['>', '<', '='], answers: { op1: '>' },
+                hint: "Khi so sánh hai phân số có cùng tử số, phân số nào có mẫu số bé hơn thì phân số đó lớn hơn (7 < 9 nên 4/7 > 4/9)."
+            },
+            {
+                id: 10, round: 2, title: "Bãi Lầy Gai Góc", type: "operator",
+                text: "So sánh phân số cùng mẫu số dưới đây:",
+                formula: [
+                    { type: 'fraction', num: 5, den: 12 },
+                    { type: 'drop', id: 'op1' },
+                    { type: 'fraction', num: 7, den: 12 }
+                ],
+                options: ['>', '<', '='], answers: { op1: '<' },
+                hint: "So sánh hai phân số cùng mẫu: phân số nào có tử số bé hơn thì bé hơn (5 < 7 nên 5/12 < 7/12)."
+            },
+            {
+                id: 11, round: 2, title: "Ải Tìm Ẩn Số", type: "number",
+                text: "Tìm giá trị của X biết: X + 1/3 = 5/6 (Quy đồng mẫu số chung là 6):",
+                formula: [
+                    { type: 'text', val: 'X =' },
+                    { type: 'fraction', num: 5, den: 6 },
+                    { type: 'text', val: '−' },
+                    { type: 'fraction', num: 2, den: 6 },
+                    { type: 'text', val: '=' },
+                    { type: 'fraction', num: '?', den: 6, isDrop: true, dropId: 'num1' }
+                ],
+                options: ['1', '2', '3', '4'], answers: { num1: '3' },
+                hint: "Muốn tìm số hạng chưa biết, ta lấy tổng trừ đi số hạng đã biết: X = 5/6 - 2/6 = 3/6."
+            },
+            {
+                id: 12, round: 2, title: "Hành Lang Gió Hú", type: "number",
+                text: "Tìm giá trị số của X trong bài toán rút gọn sau: X × 2/5 = 4/15",
+                formula: [
+                    { type: 'text', val: 'X = (4/15) ÷ (2/5) = (4/15) × (5/2) = 20/30 = 2/' },
+                    { type: 'text', val: '?', isDrop: true, dropId: 'num1' }
+                ],
+                options: ['2', '3', '4', '5'], answers: { num1: '3' },
+                hint: "X = 20/30. Chia cả tử và mẫu cho 10 để rút gọn tối giản: ta được phân số 2/3."
+            },
+            {
+                id: 13, round: 2, title: "Mật Thư Cắt Vải", type: "number",
+                text: "Một tấm vải dài 15m. Người thợ may cắt đi 2/3 tấm vải đó. Hỏi người thợ đã cắt đi bao nhiêu mét vải?",
+                formula: [
+                    { type: 'text', val: 'Số mét vải đã cắt = 15 ×' },
+                    { type: 'fraction', num: 2, den: 3 },
+                    { type: 'text', val: '=' },
+                    { type: 'text', val: '?', isDrop: true, dropId: 'num1' },
+                    { type: 'text', val: 'mét' }
+                ],
+                options: ['5', '8', '10', '12'], answers: { num1: '10' },
+                hint: "Ta tính: 15 × 2/3 = (15 × 2) / 3 = 30 / 3 = 10 mét."
+            },
+            {
+                id: 14, round: 2, title: "Bình Nước Hoang Mạc", type: "number",
+                text: "Chai nước có 4/5 lít nước, người thám hiểm đã uống hết 1/10 lít nước. Hỏi trong chai còn lại bao nhiêu lít nước? (Quy đồng mẫu số chung là 10)",
+                formula: [
+                    { type: 'text', val: 'Nước còn lại = ' },
+                    { type: 'fraction', num: 8, den: 10 },
+                    { type: 'text', val: '−' },
+                    { type: 'fraction', num: 1, den: 10 },
+                    { type: 'text', val: '=' },
+                    { type: 'fraction', num: '?', den: 10, isDrop: true, dropId: 'num1' }
+                ],
+                options: ['5', '6', '7', '9'], answers: { num1: '7' },
+                hint: "Ta quy đồng: 4/5 = 8/10. Lấy 8/10 - 1/10 = 7/10 lít nước."
+            },
+            {
+                id: 15, round: 2, title: "Cổng Đồng Thau", type: "number",
+                text: "Cộng hai phân số khác mẫu số: 3/10 + 2/5 = ?",
+                formula: [
+                    { type: 'text', val: 'Kết quả = 3/10 + 4/10 =' },
+                    { type: 'fraction', num: '?', den: 10, isDrop: true, dropId: 'num1' }
+                ],
+                options: ['5', '6', '7', '8'], answers: { num1: '7' },
+                hint: "Quy đồng phân số 2/5 thành 4/10. Sau đó cộng với 3/10: 3/10 + 4/10 = 7/10."
+            },
+
+            // --- VÒNG 3: KHAI QUẬT KHO BÁU (5 CÂU) ---
+            {
+                id: 16, round: 3, title: "Thác Nước Pha Pha Lê", type: "mixed",
+                text: "Thử thách biểu thức chứa ngoặc tròn: (1/2 + 1/4) × 4/3. Điền dấu phép tính VÀ kết quả thu gọn:",
+                formula: [
+                    { type: 'text', val: '( 2/4' },
+                    { type: 'drop', id: 'op1' },
+                    { type: 'fraction', num: 1, den: 4 },
+                    { type: 'text', val: ') ×' },
+                    { type: 'fraction', num: 4, den: 3 },
+                    { type: 'text', val: '=' },
+                    { type: 'fraction', num: 3, den: 4 },
+                    { type: 'text', val: '×' },
+                    { type: 'fraction', num: 4, den: 3 },
+                    { type: 'text', val: '=' },
+                    { type: 'text', val: '?', isDrop: true, dropId: 'num1' }
+                ],
+                options: ['+', '−', '1', '2'], answers: { op1: '+', num1: '1' },
+                hint: "Phép tính trong ngoặc là quy đồng cộng: 2/4 + 1/4 = 3/4. Sau đó lấy 3/4 × 4/3 = 12/12 = 1."
+            },
+            {
+                id: 17, round: 3, title: "Lăng Mộ Sấm Sét", type: "mixed",
+                text: "Thứ tự ưu tiên phép tính! Giải biểu thức: 5/6 - 1/6 ÷ 1/2. Điền phép tính VÀ mẫu số kết quả tối giản:",
+                formula: [
+                    { type: 'fraction', num: 5, den: 6 },
+                    { type: 'text', val: '−' },
+                    { type: 'fraction', num: 1, den: 6 },
+                    { type: 'drop', id: 'op1' },
+                    { type: 'fraction', num: 2, den: 1 },
+                    { type: 'text', val: '=' },
+                    { type: 'fraction', num: 5, den: 6 },
+                    { type: 'text', val: '−' },
+                    { type: 'fraction', num: 2, den: 6 },
+                    { type: 'text', val: '=' },
+                    { type: 'fraction', num: 3, den: 6 },
+                    { type: 'text', val: '= 1/' },
+                    { type: 'text', val: '?', isDrop: true, dropId: 'num1' }
+                ],
+                options: ['×', '÷', '2', '3'], answers: { op1: '×', num1: '2' },
+                hint: "Thực hiện nhân chia trước: 1/6 ÷ 1/2 chuyển thành nhân nghịch đảo 1/6 × 2/1. Sau đó trừ phân số được 3/6 rút gọn thành 1/2."
+            },
+            {
+                id: 18, round: 3, title: "Trọng Tải Xe Ngựa", type: "number",
+                text: "Bài toán thực tế 2 bước: Thùng dầu thứ nhất đựng 20 lít dầu. Thùng thứ hai bằng 3/4 thùng thứ nhất. Hỏi cả hai thùng đựng được bao nhiêu lít dầu?",
+                formula: [
+                    { type: 'text', val: 'Thùng 2 = 20 × 3/4 = 15 lít.' },
+                    { type: 'text', val: 'Cả hai thùng =' },
+                    { type: 'text', val: '20 + 15 =' },
+                    { type: 'text', val: '?', isDrop: true, dropId: 'num1' },
+                    { type: 'text', val: 'lít' }
+                ],
+                options: ['30', '35', '40', '45'], answers: { num1: '35' },
+                hint: "Bước 1: Tính số dầu thùng thứ hai: 20 × 3/4 = 15 lít. Bước 2: Cộng cả hai thùng: 20 + 15 = 35 lít."
+            },
+            {
+                id: 19, round: 3, title: "Mê Cung Gương Cầu", type: "number-double",
+                text: "Tính giá trị chuỗi phép tính sau: 2/3 × 3/4 + 1/2. Điền tử số của phép nhân chưa rút gọn VÀ kết quả cuối cùng:",
+                formula: [
+                    { type: 'text', val: 'Chuỗi tính = ' },
+                    { type: 'fraction', num: '?', den: 12, isDrop: true, dropId: 'num1' },
+                    { type: 'text', val: '+' },
+                    { type: 'fraction', num: 6, den: 12 },
+                    { type: 'text', val: '=' },
+                    { type: 'fraction', num: 12, den: 12 },
+                    { type: 'text', val: '=' },
+                    { type: 'text', val: '?', isDrop: true, dropId: 'num2' }
+                ],
+                options: ['6', '8', '1', '2'], answers: { num1: '6', num2: '1' },
+                hint: "Tính tích thứ nhất: 2/3 × 3/4 = 6/12. Quy đồng 1/2 = 6/12. Cộng lại: 6/12 + 6/12 = 12/12 = 1."
+            },
+            {
+                id: 20, round: 3, title: "Cổng Đền Thờ Kho Báu", type: "mixed",
+                text: "Mật thư cuối cùng! Tính giá trị biểu thức: 1 - (1/3 + 1/6). Điền dấu phép toán VÀ giá trị mẫu số kết quả tối giản:",
+                formula: [
+                    { type: 'text', val: '1 − ( 2/6' },
+                    { type: 'drop', id: 'op1' },
+                    { type: 'fraction', num: 1, den: 6 },
+                    { type: 'text', val: ') = 1 − 3/6 = 3/6 = 1/' },
+                    { type: 'text', val: '?', isDrop: true, dropId: 'num1' }
+                ],
+                options: ['+', '−', '2', '4'], answers: { op1: '+', num1: '2' },
+                hint: "Trong ngoặc là phép cộng phân số quy đồng: 2/6 + 1/6 = 3/6. Lấy 1 - 3/6 = 3/6. Rút gọn thành 1/2."
+            }
+        ];
+
+        // Game State Core
+        let currentQuestionIndex = 0;
+        let score = 0;
+        let isAnswered = false;
+        let currentSelections = {};
+        let selectedSourceElement = null;
+
+        // Power-ups state (used once per game)
+        let isTelescopeUsed = false;
+        let isCompassUsed = false;
+
+        function startGame() {
+            score = 0;
+            currentQuestionIndex = 0;
+            isAnswered = false;
+            currentSelections = {};
+            selectedSourceElement = null;
+            isTelescopeUsed = false;
+            isCompassUsed = false;
+            
+            // Reset Power-up buttons visual
+            document.getElementById('powerup-telescope').disabled = false;
+            document.getElementById('tele-status').innerText = "Sẵn sàng";
+            document.getElementById('tele-status').className = "text-[9px] bg-sky-600 px-1.5 py-0.5 rounded-full mt-1";
+            
+            document.getElementById('powerup-compass').disabled = false;
+            document.getElementById('compass-status').innerText = "Sẵn sàng";
+            document.getElementById('compass-status').className = "text-[9px] bg-rose-600 px-1.5 py-0.5 rounded-full mt-1";
+
+            document.getElementById('home-screen').classList.add('hidden');
+            document.getElementById('play-screen').classList.remove('hidden');
+            document.getElementById('stats-bar').classList.remove('hidden');
+            
+            loadQuestion();
+        }
+
+        function restartGame() {
+            document.getElementById('win-screen').classList.add('hidden');
+            startGame();
+        }
+
+        function showRules() {
+            document.getElementById('home-screen').classList.add('hidden');
+            document.getElementById('rules-screen').classList.remove('hidden');
+        }
+
+        function hideRules() {
+            document.getElementById('rules-screen').classList.add('hidden');
+            document.getElementById('home-screen').classList.remove('hidden');
+        }
+
+        function loadQuestion() {
+            isAnswered = false;
+            currentSelections = {};
+            selectedSourceElement = null;
+
+            // Interface settings
+            const feedbackArea = document.getElementById('feedback-area');
+            feedbackArea.classList.add('hidden');
+            feedbackArea.className = "hidden text-center font-bold text-sm md:text-base p-3 rounded-xl transition-all duration-300 w-full max-w-lg border";
+            
+            document.getElementById('btn-check').classList.remove('hidden');
+            document.getElementById('btn-next').classList.add('hidden');
+
+            const q = PRO_DATABASE[currentQuestionIndex];
+
+            // Setup Header badges
+            document.getElementById('current-question-num').innerText = q.id;
+            document.getElementById('current-score-badge').innerText = score;
+            document.getElementById('current-round-badge').innerText = q.round;
+
+            // Load texts
+            document.getElementById('question-text').innerText = q.text;
+
+            // Set visual Level Tag
+            const tag = document.getElementById('tag-level');
+            if (q.round === 1) {
+                tag.innerText = "Mức độ: Dễ (Vòng 1)";
+                tag.className = "bg-green-100 text-green-800 text-xs font-extrabold px-3 py-1 rounded-full uppercase tracking-wider";
+                document.getElementById('map-phase-text').innerText = "Hành trình: Vòng 1 - Khởi Động 🏕️";
+            } else if (q.round === 2) {
+                tag.innerText = "Mức độ: Vừa (Vòng 2)";
+                tag.className = "bg-sky-100 text-sky-800 text-xs font-extrabold px-3 py-1 rounded-full uppercase tracking-wider";
+                document.getElementById('map-phase-text').innerText = "Hành trình: Vòng 2 - Vượt Chướng Ngại Vật 🔥";
+            } else {
+                tag.innerText = "Mức độ: Thử thách (Vòng 3)";
+                tag.className = "bg-rose-100 text-rose-800 text-xs font-extrabold px-3 py-1 rounded-full uppercase tracking-wider";
+                document.getElementById('map-phase-text').innerText = "Hành trình: Vòng 3 - Khai Quật Kho Báu 🔱";
+            }
+
+            // Update adventure companion advice text
+            updateCompanionDialogue("default");
+
+            // Update progress track visually
+            updateAdventureMapTrack();
+
+            // Render math problem
+            renderMathBoard(q);
+
+            // Render options
+            renderOptions(q);
+
+            // Entry scale animation
+            const card = document.getElementById('game-card');
+            card.style.transform = 'scale(0.97)';
+            setTimeout(() => { card.style.transform = 'scale(1)'; }, 150);
+        }
+
+        function updateAdventureMapTrack() {
+            const progressPercent = ((currentQuestionIndex) / 20) * 100;
+            document.getElementById('map-track-fill').style.width = `${progressPercent}%`;
+
+            // Nodes status update
+            const startNode = document.getElementById('node-start');
+            const mid1Node = document.getElementById('node-mid1');
+            const mid2Node = document.getElementById('node-mid2');
+            const endNode = document.getElementById('node-end');
+
+            startNode.className = "map-node w-5 h-5 rounded-full border-2 border-white flex items-center justify-center text-[10px] text-white bg-emerald-500 active";
+            
+            if (currentQuestionIndex >= 8) {
+                mid1Node.className = "map-node w-5 h-5 rounded-full border-2 border-white flex items-center justify-center text-[10px] text-white bg-emerald-500 active";
+            } else {
+                mid1Node.className = "map-node w-5 h-5 rounded-full border-2 border-white flex items-center justify-center text-[10px] text-white bg-slate-300";
+            }
+
+            if (currentQuestionIndex >= 15) {
+                mid2Node.className = "map-node w-5 h-5 rounded-full border-2 border-white flex items-center justify-center text-[10px] text-white bg-emerald-500 active";
+            } else {
+                mid2Node.className = "map-node w-5 h-5 rounded-full border-2 border-white flex items-center justify-center text-[10px] text-white bg-slate-300";
+            }
+
+            if (currentQuestionIndex === 19) {
+                endNode.className = "map-node w-5 h-5 rounded-full border-2 border-white flex items-center justify-center text-[10px] text-white bg-amber-500 active";
+            } else {
+                endNode.className = "map-node w-5 h-5 rounded-full border-2 border-white flex items-center justify-center text-[10px] text-white bg-slate-300";
+            }
+        }
+
+        function updateCompanionDialogue(state) {
+            const bubble = document.getElementById('coco-bubble');
+            if (state === "default") {
+                const phrases = [
+                    "Đọc kỹ đề bài nhé! Bạn đang làm rất tốt đấy!",
+                    "Kéo đáp án đúng đặt vào ô trống thám hiểm.",
+                    "Đừng lo lắng, hãy phân tích kỹ mẫu số chung trước nha!",
+                    "Vòng này có vẻ thú vị đây! Hãy thử thách bộ não thông thái nào!"
+                ];
+                bubble.innerText = phrases[Math.floor(Math.random() * phrases.length)];
+            } else if (state === "correct") {
+                bubble.innerText = "Tuyệt cú mèo! Đúng rồi đó, tiếp tục tiến về phía trước nào! 🐒🎉";
+            } else if (state === "wrong") {
+                bubble.innerText = "Ồ không sao đâu! Hãy quan sát gợi ý và thử tính toán lại nhé! 🧐💪";
+            } else if (state === "telescope") {
+                bubble.innerText = "🔭 Tôi đã dùng kính viễn vọng quét và gạch bớt 2 thẻ sai rồi!";
+            } else if (state === "compass") {
+                bubble.innerText = "🧭 La bàn chỉ đường đã mở! Hãy đọc hướng dẫn chi tiết của tôi nhé.";
+            }
+        }
+
+        function renderMathBoard(q) {
+            const container = document.getElementById('math-board');
+            container.innerHTML = '';
+
+            q.formula.forEach(elem => {
+                if (elem.type === 'text') {
+                    const span = document.createElement('span');
+                    span.className = "px-1 md:px-2 select-none";
+                    span.innerText = elem.val;
+                    container.appendChild(span);
+                } else if (elem.type === 'fraction') {
+                    const fracDiv = document.createElement('div');
+                    fracDiv.className = "fraction";
+
+                    // Handle Numerator
+                    if (elem.isDrop && elem.dropId) {
+                        const dropNum = createDropZone(elem.dropId);
+                        fracDiv.appendChild(dropNum);
+                    } else {
+                        const numDiv = document.createElement('div');
+                        numDiv.className = "numerator font-header text-amber-800";
+                        numDiv.innerText = elem.num;
+                        fracDiv.appendChild(numDiv);
+                    }
+
+                    // Handle Denominator
+                    if (elem.isDrop && elem.num2Drop && elem.dropId2) {
+                        const dropDen = createDropZone(elem.dropId2);
+                        fracDiv.appendChild(dropDen);
+                    } else {
+                        const denDiv = document.createElement('div');
+                        denDiv.className = "denominator font-header text-amber-800";
+                        denDiv.innerText = elem.den;
+                        fracDiv.appendChild(denDiv);
+                    }
+
+                    container.appendChild(fracDiv);
+                } else if (elem.type === 'drop') {
+                    const drop = createDropZone(elem.id);
+                    container.appendChild(drop);
+                }
+            });
+        }
+
+        function createDropZone(id) {
+            const zone = document.createElement('div');
+            zone.id = `zone-${id}`;
+            zone.dataset.dropId = id;
+            zone.className = "drop-zone w-14 h-14 md:w-16 md:h-16 rounded-xl border-4 border-dashed border-sky-300 bg-sky-50 text-sky-800 font-header text-2xl flex items-center justify-center shadow-inner cursor-pointer pulse-target";
+            zone.innerText = "?";
+
+            // Add events
+            zone.addEventListener('dragover', handleDragOver);
+            zone.addEventListener('dragleave', handleDragLeave);
+            zone.addEventListener('drop', handleDrop);
+            zone.addEventListener('click', () => { handleZoneTap(id); });
+
+            return zone;
+        }
+
+        function renderOptions(q) {
+            const container = document.getElementById('drag-sources');
+            container.innerHTML = '';
+
+            q.options.forEach((opt, index) => {
+                const card = document.createElement('div');
+                card.id = `opt-${index}`;
+                card.dataset.value = opt;
+                card.draggable = true;
+                
+                let themeClasses = "text-amber-700 bg-white border-amber-300 hover:bg-amber-50";
+                if (['+', '−', '×', '÷'].includes(opt)) {
+                    themeClasses = "text-rose-600 bg-rose-50 border-rose-300 hover:bg-rose-100";
+                } else if (['>', '<', '='].includes(opt)) {
+                    themeClasses = "text-indigo-600 bg-indigo-50 border-indigo-300 hover:bg-indigo-100";
+                }
+
+                card.className = `draggable-item w-14 h-14 md:w-16 md:h-16 font-header text-2xl md:text-3xl rounded-2xl shadow-md border-2 flex items-center justify-center transition-all ${themeClasses}`;
+                card.innerText = opt;
+
+                card.addEventListener('dragstart', handleDragStart);
+                card.addEventListener('dragend', handleDragEnd);
+                card.addEventListener('click', () => { handleSourceTap(card); });
+
+                container.appendChild(card);
+            });
+        }
+
+        // Drag & Drop
+        let draggedValue = null;
+        function handleDragStart(e) {
+            if (isAnswered) { e.preventDefault(); return; }
+            draggedValue = this.dataset.value;
+            this.classList.add('opacity-30');
+            e.dataTransfer.setData('text/plain', draggedValue);
+        }
+        function handleDragEnd() {
+            this.classList.remove('opacity-30');
+        }
+        function handleDragOver(e) {
+            if (isAnswered) return;
+            e.preventDefault();
+            this.classList.add('drag-over');
+        }
+        function handleDragLeave() {
+            this.classList.remove('drag-over');
+        }
+        function handleDrop(e) {
+            if (isAnswered) return;
+            e.preventDefault();
+            this.classList.remove('drag-over');
+            const val = e.dataTransfer.getData('text/plain') || draggedValue;
+            if (val) {
+                assignValueToZone(this.dataset.dropId, val);
+            }
+        }
+
+        // Tap to select (Mobile friendly support)
+        function handleSourceTap(element) {
+            if (isAnswered) return;
+            playSound('click');
+
+            if (selectedSourceElement === element) {
+                element.classList.remove('ring-4', 'ring-orange-400', 'scale-105');
+                selectedSourceElement = null;
+            } else {
+                if (selectedSourceElement) {
+                    selectedSourceElement.classList.remove('ring-4', 'ring-orange-400', 'scale-105');
+                }
+                selectedSourceElement = element;
+                element.classList.add('ring-4', 'ring-orange-400', 'scale-105');
+            }
+        }
+
+        function handleZoneTap(dropId) {
+            if (isAnswered) return;
+
+            if (selectedSourceElement) {
+                const val = selectedSourceElement.dataset.value;
+                assignValueToZone(dropId, val);
+                selectedSourceElement.classList.remove('ring-4', 'ring-orange-400', 'scale-105');
+                selectedSourceElement = null;
+            } else {
+                // Clear filled zone
+                if (currentSelections[dropId]) {
+                    playSound('click');
+                    const zone = document.getElementById(`zone-${dropId}`);
+                    zone.innerText = "?";
+                    zone.className = "drop-zone w-14 h-14 md:w-16 md:h-16 rounded-xl border-4 border-dashed border-sky-300 bg-sky-50 text-sky-800 font-header text-2xl flex items-center justify-center shadow-inner cursor-pointer pulse-target";
+                    delete currentSelections[dropId];
+                }
+            }
+        }
+
+        function assignValueToZone(dropId, val) {
+            playSound('click');
+            const zone = document.getElementById(`zone-${dropId}`);
+            zone.innerText = val;
+            zone.className = "drop-zone w-14 h-14 md:w-16 md:h-16 rounded-xl border-4 border-solid border-amber-400 bg-amber-100 text-amber-800 font-header text-2xl flex items-center justify-center shadow-md cursor-pointer";
+            currentSelections[dropId] = val;
+        }
+
+        // ================= POWER-UP LOGIC =================
+        function useTelescope() {
+            if (isAnswered || isTelescopeUsed) return;
+            playSound('powerup');
+            isTelescopeUsed = true;
+            
+            // Disable button
+            const btn = document.getElementById('powerup-telescope');
+            btn.disabled = true;
+            document.getElementById('tele-status').innerText = "Đã sử dụng";
+            document.getElementById('tele-status').className = "text-[9px] bg-slate-500 px-1.5 py-0.5 rounded-full mt-1";
+
+            const q = PRO_DATABASE[currentQuestionIndex];
+            const correctValues = Object.values(q.answers);
+
+            // Find wrong options on the screen
+            const optionElements = document.querySelectorAll('#drag-sources .draggable-item');
+            let removedCount = 0;
+
+            optionElements.forEach(elem => {
+                const val = elem.dataset.value;
+                if (!correctValues.includes(val) && removedCount < 2) {
+                    elem.style.opacity = '0.2';
+                    elem.style.pointerEvents = 'none';
+                    removedCount++;
+                }
+            });
+
+            updateCompanionDialogue("telescope");
+        }
+
+        function useCompass() {
+            if (isAnswered || isCompassUsed) return;
+            playSound('powerup');
+            isCompassUsed = true;
+
+            const btn = document.getElementById('powerup-compass');
+            btn.disabled = true;
+            document.getElementById('compass-status').innerText = "Đã sử dụng";
+            document.getElementById('compass-status').className = "text-[9px] bg-slate-500 px-1.5 py-0.5 rounded-full mt-1";
+
+            const q = PRO_DATABASE[currentQuestionIndex];
+            document.getElementById('compass-detail-content').innerHTML = `
+                <p class="font-bold text-rose-800 mb-1">Gợi ý từ Coco thông thái:</p>
+                <p>${q.hint}</p>
+                <p class="text-xs text-slate-500 mt-2 italic">*Hãy áp dụng và kéo thẻ đáp án chính xác để mở khóa tiếp nhé!</p>
+            `;
+
+            // Show Custom Modal
+            const modal = document.getElementById('compass-modal');
+            modal.classList.remove('hidden');
+            setTimeout(() => { modal.querySelector('div').style.transform = 'scale(1)'; }, 50);
+
+            updateCompanionDialogue("compass");
+        }
+
+        function closeCompassModal() {
+            const modal = document.getElementById('compass-modal');
+            modal.querySelector('div').style.transform = 'scale(0.95)';
+            setTimeout(() => { modal.classList.add('hidden'); }, 150);
+        }
+
+        // ================= ANSWER EVALUATION =================
+        function checkAnswer() {
+            if (isAnswered) return;
+
+            const q = PRO_DATABASE[currentQuestionIndex];
+            const requiredKeys = Object.keys(q.answers);
+
+            // Verify all drop zones are filled
+            let allFilled = true;
+            requiredKeys.forEach(k => {
+                if (!currentSelections[k]) allFilled = false;
+            });
+
+            const feedback = document.getElementById('feedback-area');
+            feedback.classList.remove('hidden');
+
+            if (!allFilled) {
+                playSound('wrong');
+                feedback.innerText = "⚠️ Hãy điền đầy đủ các ô trống rồi mới nộp đáp án nhé!";
+                feedback.className = "text-center font-bold text-sm md:text-base p-3 rounded-xl bg-orange-100 text-orange-800 w-full max-w-lg border border-orange-300 block";
+                
+                const board = document.getElementById('math-board');
+                board.classList.add('animate-shake');
+                setTimeout(() => board.classList.remove('animate-shake'), 500);
+                return;
+            }
+
+            // Evaluate correct or not
+            let correct = true;
+            requiredKeys.forEach(k => {
+                if (currentSelections[k] !== q.answers[k]) correct = false;
+            });
+
+            if (correct) {
+                playSound('correct');
+                score += 10;
+                isAnswered = true;
+
+                document.getElementById('current-score-badge').innerText = score;
+
+                const victorySayings = [
+                    "Tuyệt vời ông mặt trời! Đáp án chính xác! 🎉",
+                    "Đúng rồi! Trí tuệ thám hiểm thật đáng nể! 🌟",
+                    "Thần kỳ chưa! Bạn tính nhanh và chuẩn quá! 🔥",
+                    "Chính xác! Một bước tiến lớn về phía ngôi đền! 🔱"
+                ];
+                feedback.innerHTML = `<div>${victorySayings[Math.floor(Math.random() * victorySayings.length)]}</div><div class="text-xs text-emerald-600 font-medium mt-1">Lý giải: ${q.hint}</div>`;
+                feedback.className = "text-center font-bold text-sm md:text-base p-3 rounded-xl bg-emerald-50 text-emerald-800 w-full max-w-lg border border-emerald-300 block";
+
+                // Greenify target zones
+                requiredKeys.forEach(k => {
+                    const zone = document.getElementById(`zone-${k}`);
+                    zone.className = "drop-zone w-14 h-14 md:w-16 md:h-16 rounded-xl border-4 border-solid border-emerald-500 bg-emerald-50 text-emerald-700 font-header text-2xl flex items-center justify-center shadow-md";
+                });
+
+                // Confetti fireworks
+                confetti({
+                    particleCount: 100,
+                    spread: 70,
+                    origin: { y: 0.75 }
+                });
+
+                updateCompanionDialogue("correct");
+
+                // Control buttons
+                document.getElementById('btn-check').classList.add('hidden');
+                document.getElementById('btn-next').classList.remove('hidden');
+
+            } else {
+                playSound('wrong');
+                // Don't set isAnswered = true to allow retry
+                const retrySayings = [
+                    "Chưa đúng rồi! Hãy thử phân tích lại một chút nhé!",
+                    "Có một chút nhầm lẫn rồi! Đừng nản lòng, tính lại nào!",
+                    "Gần đúng rồi! Hãy quy đồng mẫu số thật cẩn thận nha!"
+                ];
+                feedback.innerHTML = `<div>${retrySayings[Math.floor(Math.random() * retrySayings.length)]}</div><div class="text-xs text-rose-600 font-bold mt-1">Gợi ý từ Coco: ${q.hint}</div>`;
+                feedback.className = "text-center font-bold text-sm md:text-base p-3 rounded-xl bg-rose-50 text-rose-800 w-full max-w-lg border border-rose-300 block";
+
+                const card = document.getElementById('game-card');
+                card.classList.add('animate-shake');
+                setTimeout(() => card.classList.remove('animate-shake'), 500);
+
+                // Flash red on mistake
+                requiredKeys.forEach(k => {
+                    const zone = document.getElementById(`zone-${k}`);
+                    zone.className = "drop-zone w-14 h-14 md:w-16 md:h-16 rounded-xl border-4 border-solid border-rose-500 bg-rose-50 text-rose-700 font-header text-2xl flex items-center justify-center shadow-md";
+                    setTimeout(() => {
+                        if (!isAnswered) {
+                            zone.className = "drop-zone w-14 h-14 md:w-16 md:h-16 rounded-xl border-4 border-solid border-amber-400 bg-amber-100 text-amber-800 font-header text-2xl flex items-center justify-center shadow-md cursor-pointer";
+                        }
+                    }, 1000);
+                });
+
+                updateCompanionDialogue("wrong");
+            }
+        }
+
+        function nextQuestion() {
+            playSound('click');
+            currentQuestionIndex++;
+
+            if (currentQuestionIndex < PRO_DATABASE.length) {
+                loadQuestion();
+            } else {
+                endGame();
+            }
+        }
+
+        // ================= GAME OVER / ENDGAME =================
+        function endGame() {
+            playSound('win');
+            document.getElementById('play-screen').classList.add('hidden');
+            document.getElementById('win-screen').classList.remove('hidden');
+
+            document.getElementById('final-score').innerText = score;
+
+            let badge = "";
+            if (score >= 200) {
+                badge = "Nhà Thần Toán Vũ Trụ Đại Tài! 🔱🏆🌟";
+            } else if (score >= 160) {
+                badge = "Đại Pháp Sư Phân Số Ưu Tú! 🎖️⭐";
+            } else if (score >= 120) {
+                badge = "Thợ Săn Mật Mã Chuyên Nghiệp! 🗺️🍀";
+            } else {
+                badge = "Nhà Thám Hiểm Trẻ Đầy Triển Vọng! 🌱";
+            }
+            document.getElementById('final-badge').innerText = badge;
+
+            // Long victory confetti sequence
+            const end = Date.now() + 5 * 1000;
+            (function frame() {
+                confetti({ particleCount: 4, angle: 60, spread: 55, origin: { x: 0 } });
+                confetti({ particleCount: 4, angle: 120, spread: 55, origin: { x: 1 } });
+                if (Date.now() < end) {
+                    requestAnimationFrame(frame);
+                }
+            }());
+        }
+
+        function shareSuccess() {
+            const shareText = `Tôi vừa nhận danh hiệu "${document.getElementById('final-badge').innerText}" với điểm số tuyệt đối ${score}/200 tại trò chơi "Nhà Thám Hiểm Toán Học Pro"! Hãy cùng ôn luyện phân số lớp 5 cực vui nhé! 🧭💎`;
+            
+            const txtArea = document.createElement("textarea");
+            txtArea.value = shareText;
+            document.body.appendChild(txtArea);
+            txtArea.select();
+
+            try {
+                document.execCommand('copy');
+                const toast = document.getElementById('custom-toast');
+                toast.classList.remove('hidden');
+                toast.classList.add('opacity-100');
+                setTimeout(() => {
+                    toast.classList.add('opacity-0');
+                    setTimeout(() => {
+                        toast.classList.add('hidden');
+                        toast.classList.remove('opacity-0');
+                    }, 300);
+                }, 2000);
+            } catch (err) {
+                console.log('Lỗi sao chép');
+            }
+            document.body.removeChild(txtArea);
+        }
+    </script>
+</body>
+</html>
